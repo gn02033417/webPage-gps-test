@@ -51,6 +51,10 @@
       <div style="margin-top:8px">
         <span id="stabilityPill" class="pill bad">未開始</span>
       </div>
+      <div style="margin-top:12px">
+        <div class="title" style="margin-bottom:6px">穩定度波動圖（最近 60 秒）</div>
+        <canvas id="scoreChart" height="140" style="width:100%;border:1px solid #dbe3ef;border-radius:8px;background:#fff"></canvas>
+      </div>
       <div class="row"><div class="k">狀態</div><div class="v" id="status">尚未開始</div></div>
       <div class="row"><div class="k">穩定度判斷</div><div class="v" id="stabilityText">-</div></div>
       <div class="row"><div class="k">判斷理由</div><div class="v" id="reason">-</div></div>
@@ -89,6 +93,9 @@
   const POLL_MS = 1500;
   const FRESH_SEC = 8;
 
+  let scoreSeries = [];
+  const SCORE_KEEP = 60;
+  
   let pollTimer = null, clockTimer = null;
   let attempts = 0, success = 0;
   let lastPos = null, lastTs = null;
@@ -99,6 +106,46 @@
   const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
   const fmt = (v,d=2)=> (v==null || Number.isNaN(v)) ? "-" : Number(v).toFixed(d);
 
+function pushScorePoint(v){
+  scoreSeries.push(v);
+  if (scoreSeries.length > SCORE_KEEP) scoreSeries.shift();
+}
+
+function drawScoreChart(){
+  const cvs = $("scoreChart");
+  if (!cvs) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cvs.clientWidth || 600;
+  const h = cvs.clientHeight || 140;
+  cvs.width = Math.floor(w * dpr);
+  cvs.height = Math.floor(h * dpr);
+  const ctx = cvs.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  ctx.clearRect(0,0,w,h);
+
+  // grid
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  [0,250,500,750,1000].forEach(v=>{
+    const y = h - (v/1000)*h;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+  });
+
+  if (scoreSeries.length < 2) return;
+
+  // line
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for(let i=0;i<scoreSeries.length;i++){
+    const x = (i/(SCORE_KEEP-1))*w;
+    const y = h - (scoreSeries[i]/1000)*h;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+}
+  
   function mean(a){ return a.length ? a.reduce((s,x)=>s+x,0)/a.length : null; }
   function std(a){
     if(a.length < 2) return null;
@@ -212,6 +259,9 @@
     $("stabilityText").textContent = `${stText}（分數 ${clampedScore}/1000）`;
     $("reason").textContent =
       `accuracy=${fmt(lastPos?.coords?.accuracy)}m, 更新抖動σ=${fmt(dtStd)}s, 漂移均值=${fmt(driftM)}m, 成功率=${succRate==null?"-":(succRate*100).toFixed(1)+"%"}, 最新資料延遲=${ageSec==null?"-":fmt(ageSec,1)+"s"}`;
+
+    pushScorePoint(clampedScore);
+    drawScoreChart();
   }
 
   function onSuccess(pos){
@@ -307,7 +357,7 @@
 
   function resetStats(){
     attempts=0; success=0; lastPos=null; lastTs=null; lastFixAt=null; prevCoords=null;
-    accArr=[]; dtArr=[]; driftArr=[]; freshArr=[];
+    accArr=[]; dtArr=[]; driftArr=[]; freshArr=[];scoreSeries = [];
     $("status").textContent = "已重置";
     $("latlng").textContent = $("acc").textContent = $("alt").textContent =
     $("altAcc").textContent = $("speed").textContent = $("heading").textContent =
