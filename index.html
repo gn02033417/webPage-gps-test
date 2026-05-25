@@ -35,7 +35,6 @@
 <body>
 <div class="wrap">
   <h1>GPS 診斷儀表板</h1>
-  <p class="note">iPhone 瀏覽器無法直接提供「衛星數 / GNSS 訊號強度(dBm/SNR)」。本頁改用可取得資料計算品質與穩定度。</p>
 
   <div class="actions">
     <button id="start" type="button">開始監測</button>
@@ -44,9 +43,8 @@
   </div>
 
   <div class="grid">
-    <div class="card">
-      <div class="title">即時品質分數 (0~1000)</div>
-      <div class="score mono" id="score">0</div>
+    <div class="card">      
+      <div class="score mono" id="score">0</div><div class="title">即時品質分數 (0~1000)</div>
       <div class="bar"><div id="scoreBar"></div></div>
       <div style="margin-top:8px">
         <span id="stabilityPill" class="pill bad">未開始</span>
