@@ -31,6 +31,12 @@
     .err{color:var(--bad);white-space:pre-wrap;font-size:13px;margin-top:8px}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   </style>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
 </head>
 <body>
 <div class="wrap">
@@ -58,7 +64,12 @@
       <div class="row"><div class="k">穩定度判斷</div><div class="v" id="stabilityText">-</div></div>
       <div class="row"><div class="k">判斷理由</div><div class="v" id="reason">-</div></div>
     </div>
-    <div class="row"><div class="k">地圖</div><div class="v" id="mapLinks">-</div></div>
+
+    <div class="card">
+      <div class="title">即時地圖</div>
+      <div id="map" style="height:320px;border:1px solid #dbe3ef;border-radius:10px;"></div>
+    </div>
+    
     <div class="card">
       <div class="title">可取得定位資料</div>
       <div class="row"><div class="k">緯度 / 經度</div><div class="v mono" id="latlng">-</div></div>
@@ -263,18 +274,7 @@ function drawScoreChart(){
     drawScoreChart();
   }
 
-  function onSuccess(pos){
-    const lat = pos.coords.latitude;
-  const lng = pos.coords.longitude;
-  const g = `https://www.google.com/maps?q=${lat},${lng}`;
-  const a = `https://maps.apple.com/?ll=${lat},${lng}`;
-  const o = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
-  $("mapLinks").innerHTML =
-    `<a href="${g}" target="_blank">Google Maps</a> | ` +
-    `<a href="${a}" target="_blank">Apple Maps</a> | ` +
-    `<a href="${o}" target="_blank">OpenStreetMap</a>`;
-
-    
+  function onSuccess(pos){   
     success++;
     lastPos = pos;
     lastFixAt = Date.now();
@@ -309,6 +309,8 @@ function drawScoreChart(){
     lastTs = pos.timestamp;
     pushCap(freshArr, 1);
     updateDashboard();
+
+    updateMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
   }
 
   let prevCoords = null;
@@ -384,5 +386,63 @@ function drawScoreChart(){
   resetStats();
 })();
 </script>
+
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+<script>
+  // 放在你的 IIFE 裡面或外面都可，重點是 onSuccess 能呼叫 updateMap
+  let map = null;
+  let marker = null;
+  let accCircle = null;
+  let track = [];
+  let trackLine = null;
+
+  function initMap() {
+    if (map) return;
+    map = L.map("map").setView([25.0330, 121.5654], 16); // 預設台北101附近
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+  }
+
+  function updateMap(lat, lng, acc) {
+    initMap();
+    const latlng = [lat, lng];
+
+    if (!marker) {
+      marker = L.marker(latlng).addTo(map);
+      map.setView(latlng, 18);
+    } else {
+      marker.setLatLng(latlng);
+    }
+
+    if (!accCircle) {
+      accCircle = L.circle(latlng, {
+        radius: Math.max(1, acc || 1),
+        color: "#2563eb",
+        fillColor: "#60a5fa",
+        fillOpacity: 0.2,
+        weight: 1
+      }).addTo(map);
+    } else {
+      accCircle.setLatLng(latlng);
+      accCircle.setRadius(Math.max(1, acc || 1));
+    }
+
+    track.push(latlng);
+    if (track.length > 200) track.shift();
+
+    if (!trackLine) {
+      trackLine = L.polyline(track, { color: "#ef4444", weight: 3 }).addTo(map);
+    } else {
+      trackLine.setLatLngs(track);
+    }
+  }
+</script>
+  
 </body>
 </html>
