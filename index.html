@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>GPS 診斷儀表板</title>
+  <style>
+    :root{
+      --bg:#f5f7fb; --card:#fff; --text:#0f172a; --sub:#475569; --line:#dbe3ef;
+      --ok:#0f766e; --warn:#b45309; --bad:#b91c1c; --btn:#2563eb; --btn2:#64748b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:14px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif}
+    .wrap{max-width:900px;margin:0 auto}
+    h1{margin:0 0 8px;font-size:22px}
+    .note{margin:0 0 12px;color:var(--sub);font-size:13px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+    button{border:0;border-radius:10px;padding:10px 14px;color:#fff;font-size:16px}
+    #start{background:var(--btn)} #stop{background:var(--btn2)} #reset{background:#334155}
+    .grid{display:grid;grid-template-columns:1fr;gap:10px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .title{font-weight:700;margin-bottom:8px}
+    .row{display:grid;grid-template-columns:180px 1fr;gap:8px;padding:5px 0;border-bottom:1px dashed #edf2f8}
+    .row:last-child{border-bottom:0}
+    .k{color:var(--sub)} .v{word-break:break-all}
+    .score{font-size:40px;line-height:1;font-weight:800}
+    .bar{height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}
+    .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#b91c1c,#f59e0b,#10b981,#2563eb)}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+    .ok{background:#ccfbf1;color:#115e59} .warn{background:#fef3c7;color:#92400e} .bad{background:#fee2e2;color:#991b1b}
+    .err{color:var(--bad);white-space:pre-wrap;font-size:13px;margin-top:8px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GPS 診斷儀表板</h1>
+  <p class="note">iPhone 瀏覽器無法直接提供「衛星數 / GNSS 訊號強度(dBm/SNR)」。本頁改用可取得資料計算品質與穩定度。</p>
+
+  <div class="actions">
+    <button id="start" type="button">開始監測</button>
+    <button id="stop" type="button">停止</button>
+    <button id="reset" type="button">重置統計</button>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="title">即時品質分數 (0~1000)</div>
+      <div class="score mono" id="score">0</div>
+      <div class="bar"><div id="scoreBar"></div></div>
+      <div style="margin-top:8px">
+        <span id="stabilityPill" class="pill bad">未開始</span>
+      </div>
+      <div class="row"><div class="k">狀態</div><div class="v" id="status">尚未開始</div></div>
+      <div class="row"><div class="k">穩定度判斷</div><div class="v" id="stabilityText">-</div></div>
+      <div class="row"><div class="k">判斷理由</div><div class="v" id="reason">-</div></div>
+    </div>
+
+    <div class="card">
+      <div class="title">可取得定位資料</div>
+      <div class="row"><div class="k">緯度 / 經度</div><div class="v mono" id="latlng">-</div></div>
+      <div class="row"><div class="k">水平精確度 accuracy (m)</div><div class="v mono" id="acc">-</div></div>
+      <div class="row"><div class="k">高度 altitude (m)</div><div class="v mono" id="alt">-</div></div>
+      <div class="row"><div class="k">高度精確度 altitudeAccuracy (m)</div><div class="v mono" id="altAcc">-</div></div>
+      <div class="row"><div class="k">速度 speed (m/s)</div><div class="v mono" id="speed">-</div></div>
+      <div class="row"><div class="k">航向 heading (°)</div><div class="v mono" id="heading">-</div></div>
+      <div class="row"><div class="k">定位時間戳</div><div class="v mono" id="gpsTime">-</div></div>
+      <div class="row"><div class="k">最後更新距今</div><div class="v mono" id="ageSec">-</div></div>
+      <div class="row"><div class="k">更新間隔 Δt (秒)</div><div class="v mono" id="dtNow">-</div></div>
+    </div>
+
+    <div class="card">
+      <div class="title">穩定度統計 (最近 30 筆)</div>
+      <div class="row"><div class="k">成功率</div><div class="v mono" id="successRate">-</div></div>
+      <div class="row"><div class="k">accuracy 平均 / 中位數 / 標準差</div><div class="v mono" id="accStats">-</div></div>
+      <div class="row"><div class="k">更新間隔 平均 / 抖動(標準差)</div><div class="v mono" id="dtStats">-</div></div>
+      <div class="row"><div class="k">座標漂移距離 平均 / 最大 (m)</div><div class="v mono" id="driftStats">-</div></div>
+      <div class="row"><div class="k">可用率(非過期資料)</div><div class="v mono" id="freshRate">-</div></div>
+      <div class="row"><div class="k">推定資料來源</div><div class="v" id="sourceHint">-</div></div>
+      <div class="row"><div class="k">無法取得的欄位</div><div class="v">衛星數、GNSS SNR/dBm、每顆衛星資訊（瀏覽器限制）</div></div>
+      <div id="err" class="err"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const N = 30;
+  const POLL_MS = 3000;
+  const FRESH_SEC = 8;
+
+  let pollTimer = null, clockTimer = null;
+  let attempts = 0, success = 0;
+  let lastPos = null, lastTs = null;
+  let lastFixAt = null;
+  let accArr = [], dtArr = [], driftArr = [], freshArr = [];
+
+  const $ = id => document.getElementById(id);
+  const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+  const fmt = (v,d=2)=> (v==null || Number.isNaN(v)) ? "-" : Number(v).toFixed(d);
+
+  function mean(a){ return a.length ? a.reduce((s,x)=>s+x,0)/a.length : null; }
+  function std(a){
+    if(a.length < 2) return null;
+    const m = mean(a);
+    return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/a.length);
+  }
+  function median(a){
+    if(!a.length) return null;
+    const b = [...a].sort((x,y)=>x-y), m = Math.floor(b.length/2);
+    return b.length%2 ? b[m] : (b[m-1]+b[m])/2;
+  }
+  function pushCap(arr, v){ arr.push(v); if(arr.length>N) arr.shift(); }
+
+  function haversine(lat1, lon1, lat2, lon2){
+    const R = 6371000, toRad = x => x * Math.PI / 180;
+    const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function sourceHint(acc){
+    if(acc == null) return "未知";
+    if(acc <= 20) return "可能 GPS 主導";
+    if(acc <= 80) return "可能 GPS + Wi-Fi/基地台";
+    return "可能 Wi-Fi/基地台估算為主";
+  }
+
+  function accScore(acc){ // 0~400
+    if(acc == null) return 80;
+    if(acc <= 5) return 400;
+    if(acc <= 10) return 360;
+    if(acc <= 20) return 320;
+    if(acc <= 50) return 240;
+    if(acc <= 100) return 150;
+    if(acc <= 200) return 80;
+    return 20;
+  }
+  function jitterScore(s){ // 0~180
+    if(s == null) return 90;
+    if(s <= 0.5) return 180;
+    if(s <= 1) return 150;
+    if(s <= 2) return 120;
+    if(s <= 4) return 80;
+    return 40;
+  }
+  function driftScore(m){ // 0~180
+    if(m == null) return 90;
+    if(m <= 5) return 180;
+    if(m <= 10) return 150;
+    if(m <= 20) return 120;
+    if(m <= 40) return 80;
+    return 40;
+  }
+  function successScore(rate){ // 0~160
+    if(rate == null) return 0;
+    return clamp(rate,0,1) * 160;
+  }
+  function freshnessScore(ageSec){ // 0~80
+    if(ageSec == null) return 0;
+    if(ageSec <= 3) return 80;
+    if(ageSec <= 8) return 60;
+    if(ageSec <= 15) return 40;
+    return 10;
+  }
+
+  function classifyStability(score){
+    if(score >= 850) return ["非常穩定","ok"];
+    if(score >= 700) return ["穩定","ok"];
+    if(score >= 550) return ["普通","warn"];
+    if(score >= 350) return ["偏不穩定","warn"];
+    return ["不穩定","bad"];
+  }
+
+  function setPill(text, cls){
+    const el = $("stabilityPill");
+    el.textContent = text;
+    el.className = "pill " + cls;
+  }
+
+  function updateDashboard() {
+    const now = Date.now();
+    const ageSec = lastFixAt ? (now - lastFixAt)/1000 : null;
+    $("ageSec").textContent = ageSec == null ? "-" : fmt(ageSec,1) + " s";
+
+    const accM = mean(accArr), accMed = median(accArr), accStd = std(accArr);
+    const dtM = mean(dtArr), dtStd = std(dtArr);
+    const driftM = mean(driftArr), driftMax = driftArr.length ? Math.max(...driftArr) : null;
+    const succRate = attempts ? success / attempts : null;
+    const freshRate = freshArr.length ? mean(freshArr) : null;
+
+    $("successRate").textContent = succRate == null ? "-" : (succRate*100).toFixed(1) + "% (" + success + "/" + attempts + ")";
+    $("accStats").textContent = accArr.length ? `${fmt(accM)} / ${fmt(accMed)} / ${fmt(accStd)} m` : "-";
+    $("dtStats").textContent = dtArr.length ? `${fmt(dtM)} / ${fmt(dtStd)} s` : "-";
+    $("driftStats").textContent = driftArr.length ? `${fmt(driftM)} / ${fmt(driftMax)} m` : "-";
+    $("freshRate").textContent = freshRate == null ? "-" : (freshRate*100).toFixed(1) + "%";
+
+    const score = Math.round(
+      accScore(lastPos?.coords?.accuracy) +
+      jitterScore(dtStd) +
+      driftScore(driftM) +
+      successScore(succRate) +
+      freshnessScore(ageSec)
+    );
+    const clampedScore = clamp(score, 0, 1000);
+
+    $("score").textContent = String(clampedScore);
+    $("scoreBar").style.width = (clampedScore / 1000 * 100).toFixed(1) + "%";
+
+    const [stText, cls] = classifyStability(clampedScore);
+    setPill(stText, cls);
+    $("stabilityText").textContent = `${stText}（分數 ${clampedScore}/1000）`;
+    $("reason").textContent =
+      `accuracy=${fmt(lastPos?.coords?.accuracy)}m, 更新抖動σ=${fmt(dtStd)}s, 漂移均值=${fmt(driftM)}m, 成功率=${succRate==null?"-":(succRate*100).toFixed(1)+"%"}, 最新資料延遲=${ageSec==null?"-":fmt(ageSec,1)+"s"}`;
+  }
+
+  function onSuccess(pos){
+    success++;
+    lastPos = pos;
+    lastFixAt = Date.now();
+    $("status").textContent = "定位中";
+    $("err").textContent = "";
+
+    const c = pos.coords;
+    $("latlng").textContent = `${fmt(c.latitude,6)}, ${fmt(c.longitude,6)}`;
+    $("acc").textContent = c.accuracy == null ? "-" : fmt(c.accuracy,2);
+    $("alt").textContent = c.altitude == null ? "-" : fmt(c.altitude,2);
+    $("altAcc").textContent = c.altitudeAccuracy == null ? "-" : fmt(c.altitudeAccuracy,2);
+    $("speed").textContent = c.speed == null ? "-" : fmt(c.speed,2);
+    $("heading").textContent = c.heading == null ? "-" : fmt(c.heading,2);
+    $("gpsTime").textContent = new Date(pos.timestamp).toLocaleString();
+    $("sourceHint").textContent = sourceHint(c.accuracy);
+
+    pushCap(accArr, c.accuracy ?? NaN);
+    if (lastTs != null) {
+      const dt = (pos.timestamp - lastTs) / 1000;
+      $("dtNow").textContent = fmt(dt,2) + " s";
+      if (Number.isFinite(dt) && dt >= 0) pushCap(dtArr, dt);
+    } else {
+      $("dtNow").textContent = "-";
+    }
+
+    if (lastPos && lastPos !== pos) {
+      const p = lastPos.coords;
+      // drift vs previous successful point
+      // use prior point from arrays by storing before overwrite was needed; here we compute safely only if last coords existed
+      // we need previous position: keep separate
+    }
+    lastTs = pos.timestamp;
+    pushCap(freshArr, 1);
+    updateDashboard();
+  }
+
+  let prevCoords = null;
+  function onSuccessWrap(pos){
+    attempts++;
+    // drift with previous coords
+    if (prevCoords) {
+      const d = haversine(prevCoords.latitude, prevCoords.longitude, pos.coords.latitude, pos.coords.longitude);
+      if (Number.isFinite(d)) pushCap(driftArr, d);
+    }
+    prevCoords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    onSuccess(pos);
+  }
+
+  function onError(err){
+    attempts++;
+    $("status").textContent = "失敗";
+    $("err").textContent = `定位錯誤(${err.code}): ${err.message}`;
+    pushCap(freshArr, 0);
+    updateDashboard();
+  }
+
+  function pollOnce(){
+    if(!navigator.geolocation){
+      $("err").textContent = "瀏覽器不支援 Geolocation API";
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(onSuccessWrap, onError, {
+      enableHighAccuracy: true, timeout: 10000, maximumAge: 0
+    });
+  }
+
+  function start(){
+    if(!window.isSecureContext){
+      $("status").textContent = "失敗";
+      $("err").textContent = "目前不是安全來源，請改用 HTTPS。";
+      return;
+    }
+    if(pollTimer) return;
+    $("status").textContent = "請求定位權限中...";
+    pollOnce();
+    pollTimer = setInterval(pollOnce, POLL_MS);
+    clockTimer = setInterval(() => {
+      const age = lastFixAt ? (Date.now() - lastFixAt)/1000 : null;
+      pushCap(freshArr, age != null && age <= FRESH_SEC ? 1 : 0);
+      updateDashboard();
+    }, 1000);
+  }
+
+  function stop(){
+    if(pollTimer) clearInterval(pollTimer);
+    if(clockTimer) clearInterval(clockTimer);
+    pollTimer = null; clockTimer = null;
+    $("status").textContent = "已停止";
+  }
+
+  function resetStats(){
+    attempts=0; success=0; lastPos=null; lastTs=null; lastFixAt=null; prevCoords=null;
+    accArr=[]; dtArr=[]; driftArr=[]; freshArr=[];
+    $("status").textContent = "已重置";
+    $("latlng").textContent = $("acc").textContent = $("alt").textContent =
+    $("altAcc").textContent = $("speed").textContent = $("heading").textContent =
+    $("gpsTime").textContent = $("ageSec").textContent = $("dtNow").textContent =
+    $("successRate").textContent = $("accStats").textContent = $("dtStats").textContent =
+    $("driftStats").textContent = $("freshRate").textContent = $("sourceHint").textContent = "-";
+    $("score").textContent = "0"; $("scoreBar").style.width = "0%";
+    setPill("未開始","bad"); $("stabilityText").textContent = "-"; $("reason").textContent = "-"; $("err").textContent = "";
+  }
+
+  $("start").addEventListener("click", start);
+  $("stop").addEventListener("click", stop);
+  $("reset").addEventListener("click", resetStats);
+  resetStats();
+})();
+</script>
+</body>
+</html>
