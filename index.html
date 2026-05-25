@@ -4,14 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>GPS 診斷儀表板</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <style>
-    :root{
-      --bg:#f5f7fb; --card:#fff; --text:#0f172a; --sub:#475569; --line:#dbe3ef;
-      --ok:#0f766e; --warn:#b45309; --bad:#b91c1c; --btn:#2563eb; --btn2:#64748b;
-    }
+    :root{--bg:#f5f7fb;--card:#fff;--text:#0f172a;--sub:#475569;--line:#dbe3ef;--ok:#0f766e;--warn:#b45309;--bad:#b91c1c;--btn:#2563eb;--btn2:#64748b;}
     *{box-sizing:border-box}
     body{margin:0;padding:14px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif}
-    .wrap{max-width:900px;margin:0 auto}
+    .wrap{max-width:980px;margin:0 auto}
     h1{margin:0 0 8px;font-size:22px}
     .note{margin:0 0 12px;color:var(--sub);font-size:13px}
     .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
@@ -25,23 +23,18 @@
     .k{color:var(--sub)} .v{word-break:break-all}
     .score{font-size:40px;line-height:1;font-weight:800}
     .bar{height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}
-    .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#b91c1c,#f59e0b,#10b981,#2563eb)}
+    .bar>div{height:100%;width:0%;background:linear-gradient(90deg,#b91c1c,#f59e0b,#10b981,#2563eb)}
     .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
     .ok{background:#ccfbf1;color:#115e59} .warn{background:#fef3c7;color:#92400e} .bad{background:#fee2e2;color:#991b1b}
     .err{color:var(--bad);white-space:pre-wrap;font-size:13px;margin-top:8px}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    #map{height:340px;border:1px solid #dbe3ef;border-radius:10px}
   </style>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
 </head>
 <body>
 <div class="wrap">
   <h1>GPS 診斷儀表板</h1>
-
+  <p class="note">iPhone 瀏覽器無法直接提供衛星數與 GNSS dBm/SNR。此頁使用可取得資料做品質與穩定度判讀。</p>
   <div class="actions">
     <button id="start" type="button">開始監測</button>
     <button id="stop" type="button">停止</button>
@@ -53,23 +46,17 @@
       <div class="title">即時品質分數 (0~1000)</div>
       <div class="score mono" id="score">0</div>
       <div class="bar"><div id="scoreBar"></div></div>
-      <div style="margin-top:8px">
-        <span id="stabilityPill" class="pill bad">未開始</span>
-      </div>
-      <div style="margin-top:12px">
-        <div class="title" style="margin-bottom:6px">穩定度波動圖（最近 60 秒）</div>
-        <canvas id="scoreChart" height="140" style="width:100%;border:1px solid #dbe3ef;border-radius:8px;background:#fff"></canvas>
-      </div>
+      <div style="margin-top:8px"><span id="stabilityPill" class="pill bad">未開始</span></div>
       <div class="row"><div class="k">狀態</div><div class="v" id="status">尚未開始</div></div>
       <div class="row"><div class="k">穩定度判斷</div><div class="v" id="stabilityText">-</div></div>
       <div class="row"><div class="k">判斷理由</div><div class="v" id="reason">-</div></div>
     </div>
 
     <div class="card">
-      <div class="title">即時地圖</div>
-      <div id="map" style="height:320px;border:1px solid #dbe3ef;border-radius:10px;"></div>
+      <div class="title">即時地圖（自動跟隨）</div>
+      <div id="map"></div>
     </div>
-    
+
     <div class="card">
       <div class="title">可取得定位資料</div>
       <div class="row"><div class="k">緯度 / 經度</div><div class="v mono" id="latlng">-</div></div>
@@ -91,160 +78,89 @@
       <div class="row"><div class="k">座標漂移距離 平均 / 最大 (m)</div><div class="v mono" id="driftStats">-</div></div>
       <div class="row"><div class="k">可用率(非過期資料)</div><div class="v mono" id="freshRate">-</div></div>
       <div class="row"><div class="k">推定資料來源</div><div class="v" id="sourceHint">-</div></div>
+      <div class="row"><div class="k">地圖連結</div><div class="v" id="mapLinks">-</div></div>
       <div class="row"><div class="k">無法取得的欄位</div><div class="v">衛星數、GNSS SNR/dBm、每顆衛星資訊（瀏覽器限制）</div></div>
       <div id="err" class="err"></div>
     </div>
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 (() => {
   const N = 30;
   const POLL_MS = 1500;
   const FRESH_SEC = 8;
 
-  let scoreSeries = [];
-  const SCORE_KEEP = 60;
-  
   let pollTimer = null, clockTimer = null;
   let attempts = 0, success = 0;
-  let lastPos = null, lastTs = null;
-  let lastFixAt = null;
+  let lastPos = null, lastTs = null, lastFixAt = null, prevCoords = null;
   let accArr = [], dtArr = [], driftArr = [], freshArr = [];
+
+  let map = null, marker = null, accCircle = null, trackLine = null;
+  let track = [];
 
   const $ = id => document.getElementById(id);
   const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
   const fmt = (v,d=2)=> (v==null || Number.isNaN(v)) ? "-" : Number(v).toFixed(d);
 
-function pushScorePoint(v){
-  scoreSeries.push(v);
-  if (scoreSeries.length > SCORE_KEEP) scoreSeries.shift();
-}
-
-function drawScoreChart(){
-  const cvs = $("scoreChart");
-  if (!cvs) return;
-  const dpr = window.devicePixelRatio || 1;
-  const w = cvs.clientWidth || 600;
-  const h = cvs.clientHeight || 140;
-  cvs.width = Math.floor(w * dpr);
-  cvs.height = Math.floor(h * dpr);
-  const ctx = cvs.getContext("2d");
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-
-  ctx.clearRect(0,0,w,h);
-
-  // grid
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 1;
-  [0,250,500,750,1000].forEach(v=>{
-    const y = h - (v/1000)*h;
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
-  });
-
-  if (scoreSeries.length < 2) return;
-
-  // line
-  ctx.strokeStyle = "#2563eb";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for(let i=0;i<scoreSeries.length;i++){
-    const x = (i/(SCORE_KEEP-1))*w;
-    const y = h - (scoreSeries[i]/1000)*h;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-}
-  
   function mean(a){ return a.length ? a.reduce((s,x)=>s+x,0)/a.length : null; }
-  function std(a){
-    if(a.length < 2) return null;
-    const m = mean(a);
-    return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/a.length);
-  }
-  function median(a){
-    if(!a.length) return null;
-    const b = [...a].sort((x,y)=>x-y), m = Math.floor(b.length/2);
-    return b.length%2 ? b[m] : (b[m-1]+b[m])/2;
-  }
-  function pushCap(arr, v){ arr.push(v); if(arr.length>N) arr.shift(); }
+  function std(a){ if(a.length<2) return null; const m=mean(a); return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/a.length); }
+  function median(a){ if(!a.length) return null; const b=[...a].sort((x,y)=>x-y), m=Math.floor(b.length/2); return b.length%2?b[m]:(b[m-1]+b[m])/2; }
+  function pushCap(arr,v){ arr.push(v); if(arr.length>N) arr.shift(); }
 
   function haversine(lat1, lon1, lat2, lon2){
-    const R = 6371000, toRad = x => x * Math.PI / 180;
-    const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const R=6371000,toRad=x=>x*Math.PI/180;
+    const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+    const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
   }
 
-  function sourceHint(acc){
-    if(acc == null) return "未知";
-    if(acc <= 20) return "可能 GPS 主導";
-    if(acc <= 80) return "可能 GPS + Wi-Fi/基地台";
-    return "可能 Wi-Fi/基地台估算為主";
+  function sourceHint(acc){ if(acc==null) return "未知"; if(acc<=20) return "可能 GPS 主導"; if(acc<=80) return "可能 GPS + Wi-Fi/基地台"; return "可能 Wi-Fi/基地台估算為主"; }
+  function accScore(acc){ if(acc==null) return 80; if(acc<=5) return 400; if(acc<=10) return 360; if(acc<=20) return 320; if(acc<=50) return 240; if(acc<=100) return 150; if(acc<=200) return 80; return 20; }
+  function jitterScore(s){ if(s==null) return 90; if(s<=0.5) return 180; if(s<=1) return 150; if(s<=2) return 120; if(s<=4) return 80; return 40; }
+  function driftScore(m){ if(m==null) return 90; if(m<=5) return 180; if(m<=10) return 150; if(m<=20) return 120; if(m<=40) return 80; return 40; }
+  function successScore(rate){ if(rate==null) return 0; return clamp(rate,0,1)*160; }
+  function freshnessScore(ageSec){ if(ageSec==null) return 0; if(ageSec<=3) return 80; if(ageSec<=8) return 60; if(ageSec<=15) return 40; return 10; }
+  function classifyStability(score){ if(score>=850) return ["非常穩定","ok"]; if(score>=700) return ["穩定","ok"]; if(score>=550) return ["普通","warn"]; if(score>=350) return ["偏不穩定","warn"]; return ["不穩定","bad"]; }
+
+  function setPill(text, cls){ const el=$("stabilityPill"); el.textContent=text; el.className="pill "+cls; }
+
+  function initMap(){
+    if(map) return;
+    map = L.map("map").setView([25.0330,121.5654], 16);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:20, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
   }
 
-  function accScore(acc){ // 0~400
-    if(acc == null) return 80;
-    if(acc <= 5) return 400;
-    if(acc <= 10) return 360;
-    if(acc <= 20) return 320;
-    if(acc <= 50) return 240;
-    if(acc <= 100) return 150;
-    if(acc <= 200) return 80;
-    return 20;
-  }
-  function jitterScore(s){ // 0~180
-    if(s == null) return 90;
-    if(s <= 0.5) return 180;
-    if(s <= 1) return 150;
-    if(s <= 2) return 120;
-    if(s <= 4) return 80;
-    return 40;
-  }
-  function driftScore(m){ // 0~180
-    if(m == null) return 90;
-    if(m <= 5) return 180;
-    if(m <= 10) return 150;
-    if(m <= 20) return 120;
-    if(m <= 40) return 80;
-    return 40;
-  }
-  function successScore(rate){ // 0~160
-    if(rate == null) return 0;
-    return clamp(rate,0,1) * 160;
-  }
-  function freshnessScore(ageSec){ // 0~80
-    if(ageSec == null) return 0;
-    if(ageSec <= 3) return 80;
-    if(ageSec <= 8) return 60;
-    if(ageSec <= 15) return 40;
-    return 10;
+  function updateMap(lat, lng, acc){
+    initMap();
+    const latlng = [lat, lng];
+    if(!marker){ marker = L.marker(latlng).addTo(map); map.setView(latlng,18); }
+    else { marker.setLatLng(latlng); map.setView(latlng, map.getZoom(), { animate:true }); }
+
+    if(!accCircle){
+      accCircle = L.circle(latlng, { radius:Math.max(1,acc||1), color:"#2563eb", fillColor:"#60a5fa", fillOpacity:0.2, weight:1 }).addTo(map);
+    } else {
+      accCircle.setLatLng(latlng);
+      accCircle.setRadius(Math.max(1,acc||1));
+    }
+
+    track.push(latlng);
+    if(track.length > 200) track.shift();
+    if(!trackLine){ trackLine = L.polyline(track,{color:"#ef4444",weight:3}).addTo(map); }
+    else { trackLine.setLatLngs(track); }
   }
 
-  function classifyStability(score){
-    if(score >= 850) return ["非常穩定","ok"];
-    if(score >= 700) return ["穩定","ok"];
-    if(score >= 550) return ["普通","warn"];
-    if(score >= 350) return ["偏不穩定","warn"];
-    return ["不穩定","bad"];
-  }
-
-  function setPill(text, cls){
-    const el = $("stabilityPill");
-    el.textContent = text;
-    el.className = "pill " + cls;
-  }
-
-  function updateDashboard() {
+  function updateDashboard(){
     const now = Date.now();
-    const ageSec = lastFixAt ? (now - lastFixAt)/1000 : null;
+    const ageSec = lastFixAt ? (now-lastFixAt)/1000 : null;
     $("ageSec").textContent = ageSec == null ? "-" : fmt(ageSec,1) + " s";
 
-    const accM = mean(accArr), accMed = median(accArr), accStd = std(accArr);
-    const dtM = mean(dtArr), dtStd = std(dtArr);
-    const driftM = mean(driftArr), driftMax = driftArr.length ? Math.max(...driftArr) : null;
-    const succRate = attempts ? success / attempts : null;
-    const freshRate = freshArr.length ? mean(freshArr) : null;
+    const accM=mean(accArr), accMed=median(accArr), accStd=std(accArr);
+    const dtM=mean(dtArr), dtStd=std(dtArr);
+    const driftM=mean(driftArr), driftMax=driftArr.length?Math.max(...driftArr):null;
+    const succRate=attempts?success/attempts:null;
+    const freshRate=freshArr.length?mean(freshArr):null;
 
     $("successRate").textContent = succRate == null ? "-" : (succRate*100).toFixed(1) + "% (" + success + "/" + attempts + ")";
     $("accStats").textContent = accArr.length ? `${fmt(accM)} / ${fmt(accMed)} / ${fmt(accStd)} m` : "-";
@@ -252,32 +168,19 @@ function drawScoreChart(){
     $("driftStats").textContent = driftArr.length ? `${fmt(driftM)} / ${fmt(driftMax)} m` : "-";
     $("freshRate").textContent = freshRate == null ? "-" : (freshRate*100).toFixed(1) + "%";
 
-    const score = Math.round(
-      accScore(lastPos?.coords?.accuracy) +
-      jitterScore(dtStd) +
-      driftScore(driftM) +
-      successScore(succRate) +
-      freshnessScore(ageSec)
-    );
-    const clampedScore = clamp(score, 0, 1000);
-
+    const score = Math.round(accScore(lastPos?.coords?.accuracy) + jitterScore(dtStd) + driftScore(driftM) + successScore(succRate) + freshnessScore(ageSec));
+    const clampedScore = clamp(score,0,1000);
     $("score").textContent = String(clampedScore);
-    $("scoreBar").style.width = (clampedScore / 1000 * 100).toFixed(1) + "%";
+    $("scoreBar").style.width = (clampedScore/1000*100).toFixed(1) + "%";
 
     const [stText, cls] = classifyStability(clampedScore);
     setPill(stText, cls);
     $("stabilityText").textContent = `${stText}（分數 ${clampedScore}/1000）`;
-    $("reason").textContent =
-      `accuracy=${fmt(lastPos?.coords?.accuracy)}m, 更新抖動σ=${fmt(dtStd)}s, 漂移均值=${fmt(driftM)}m, 成功率=${succRate==null?"-":(succRate*100).toFixed(1)+"%"}, 最新資料延遲=${ageSec==null?"-":fmt(ageSec,1)+"s"}`;
-
-    pushScorePoint(clampedScore);
-    drawScoreChart();
+    $("reason").textContent = `accuracy=${fmt(lastPos?.coords?.accuracy)}m, 更新抖動σ=${fmt(dtStd)}s, 漂移均值=${fmt(driftM)}m, 成功率=${succRate==null?"-":(succRate*100).toFixed(1)+"%"}, 最新資料延遲=${ageSec==null?"-":fmt(ageSec,1)+"s"}`;
   }
 
-  function onSuccess(pos){   
-    success++;
-    lastPos = pos;
-    lastFixAt = Date.now();
+  function onSuccess(pos){
+    attempts++; success++; lastPos=pos; lastFixAt=Date.now();
     $("status").textContent = "定位中";
     $("err").textContent = "";
 
@@ -291,38 +194,29 @@ function drawScoreChart(){
     $("gpsTime").textContent = new Date(pos.timestamp).toLocaleString();
     $("sourceHint").textContent = sourceHint(c.accuracy);
 
+    const lat = c.latitude, lng = c.longitude;
+    const g = `https://www.google.com/maps?q=${lat},${lng}`;
+    const a = `https://maps.apple.com/?ll=${lat},${lng}`;
+    const o = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
+    $("mapLinks").innerHTML = `<a href="${g}" target="_blank">Google Maps</a> | <a href="${a}" target="_blank">Apple Maps</a> | <a href="${o}" target="_blank">OpenStreetMap</a>`;
+
+    if(prevCoords){
+      const d = haversine(prevCoords.latitude, prevCoords.longitude, lat, lng);
+      if(Number.isFinite(d)) pushCap(driftArr, d);
+    }
+    prevCoords = { latitude: lat, longitude: lng };
+
     pushCap(accArr, c.accuracy ?? NaN);
-    if (lastTs != null) {
-      const dt = (pos.timestamp - lastTs) / 1000;
+    if(lastTs != null){
+      const dt = (pos.timestamp-lastTs)/1000;
       $("dtNow").textContent = fmt(dt,2) + " s";
-      if (Number.isFinite(dt) && dt >= 0) pushCap(dtArr, dt);
-    } else {
-      $("dtNow").textContent = "-";
-    }
-
-    if (lastPos && lastPos !== pos) {
-      const p = lastPos.coords;
-      // drift vs previous successful point
-      // use prior point from arrays by storing before overwrite was needed; here we compute safely only if last coords existed
-      // we need previous position: keep separate
-    }
+      if(Number.isFinite(dt) && dt >= 0) pushCap(dtArr, dt);
+    } else { $("dtNow").textContent = "-"; }
     lastTs = pos.timestamp;
+
     pushCap(freshArr, 1);
+    updateMap(lat, lng, c.accuracy);
     updateDashboard();
-
-    updateMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-  }
-
-  let prevCoords = null;
-  function onSuccessWrap(pos){
-    attempts++;
-    // drift with previous coords
-    if (prevCoords) {
-      const d = haversine(prevCoords.latitude, prevCoords.longitude, pos.coords.latitude, pos.coords.longitude);
-      if (Number.isFinite(d)) pushCap(driftArr, d);
-    }
-    prevCoords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-    onSuccess(pos);
   }
 
   function onError(err){
@@ -334,27 +228,18 @@ function drawScoreChart(){
   }
 
   function pollOnce(){
-    if(!navigator.geolocation){
-      $("err").textContent = "瀏覽器不支援 Geolocation API";
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(onSuccessWrap, onError, {
-      enableHighAccuracy: true, timeout: 10000, maximumAge: 0
-    });
+    if(!navigator.geolocation){ $("err").textContent = "瀏覽器不支援 Geolocation API"; return; }
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
   }
 
   function start(){
-    if(!window.isSecureContext){
-      $("status").textContent = "失敗";
-      $("err").textContent = "目前不是安全來源，請改用 HTTPS。";
-      return;
-    }
+    if(!window.isSecureContext){ $("status").textContent = "失敗"; $("err").textContent = "目前不是安全來源，請改用 HTTPS。"; return; }
     if(pollTimer) return;
     $("status").textContent = "請求定位權限中...";
     pollOnce();
     pollTimer = setInterval(pollOnce, POLL_MS);
     clockTimer = setInterval(() => {
-      const age = lastFixAt ? (Date.now() - lastFixAt)/1000 : null;
+      const age = lastFixAt ? (Date.now()-lastFixAt)/1000 : null;
       pushCap(freshArr, age != null && age <= FRESH_SEC ? 1 : 0);
       updateDashboard();
     }, 1000);
@@ -369,80 +254,22 @@ function drawScoreChart(){
 
   function resetStats(){
     attempts=0; success=0; lastPos=null; lastTs=null; lastFixAt=null; prevCoords=null;
-    accArr=[]; dtArr=[]; driftArr=[]; freshArr=[];scoreSeries = [];
+    accArr=[]; dtArr=[]; driftArr=[]; freshArr=[]; track=[];
     $("status").textContent = "已重置";
-    $("latlng").textContent = $("acc").textContent = $("alt").textContent =
-    $("altAcc").textContent = $("speed").textContent = $("heading").textContent =
-    $("gpsTime").textContent = $("ageSec").textContent = $("dtNow").textContent =
-    $("successRate").textContent = $("accStats").textContent = $("dtStats").textContent =
-    $("driftStats").textContent = $("freshRate").textContent = $("sourceHint").textContent = "-";
-    $("score").textContent = "0"; $("scoreBar").style.width = "0%";
-    setPill("未開始","bad"); $("stabilityText").textContent = "-"; $("reason").textContent = "-"; $("err").textContent = "";
+    ["latlng","acc","alt","altAcc","speed","heading","gpsTime","ageSec","dtNow","successRate","accStats","dtStats","driftStats","freshRate","sourceHint","mapLinks"].forEach(id => $(id).textContent = "-");
+    $("score").textContent = "0"; $("scoreBar").style.width = "0%"; setPill("未開始","bad"); $("stabilityText").textContent = "-"; $("reason").textContent = "-"; $("err").textContent = "";
+    initMap();
+    if(marker){ map.removeLayer(marker); marker = null; }
+    if(accCircle){ map.removeLayer(accCircle); accCircle = null; }
+    if(trackLine){ map.removeLayer(trackLine); trackLine = null; }
   }
 
   $("start").addEventListener("click", start);
   $("stop").addEventListener("click", stop);
   $("reset").addEventListener("click", resetStats);
+  initMap();
   resetStats();
 })();
 </script>
-
-<script
-  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-  crossorigin=""
-></script>
-<script>
-  // 放在你的 IIFE 裡面或外面都可，重點是 onSuccess 能呼叫 updateMap
-  let map = null;
-  let marker = null;
-  let accCircle = null;
-  let track = [];
-  let trackLine = null;
-
-  function initMap() {
-    if (map) return;
-    map = L.map("map").setView([25.0330, 121.5654], 16); // 預設台北101附近
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 20,
-      attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(map);
-  }
-
-  function updateMap(lat, lng, acc) {
-    initMap();
-    const latlng = [lat, lng];
-
-    if (!marker) {
-      marker = L.marker(latlng).addTo(map);
-      map.setView(latlng, 18);
-    } else {
-      marker.setLatLng(latlng);
-    }
-
-    if (!accCircle) {
-      accCircle = L.circle(latlng, {
-        radius: Math.max(1, acc || 1),
-        color: "#2563eb",
-        fillColor: "#60a5fa",
-        fillOpacity: 0.2,
-        weight: 1
-      }).addTo(map);
-    } else {
-      accCircle.setLatLng(latlng);
-      accCircle.setRadius(Math.max(1, acc || 1));
-    }
-
-    track.push(latlng);
-    if (track.length > 200) track.shift();
-
-    if (!trackLine) {
-      trackLine = L.polyline(track, { color: "#ef4444", weight: 3 }).addTo(map);
-    } else {
-      trackLine.setLatLngs(track);
-    }
-  }
-</script>
-  
 </body>
 </html>
