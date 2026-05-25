@@ -43,8 +43,9 @@
   </div>
 
   <div class="grid">
-    <div class="card">      
-      <div class="score mono" id="score">0</div><div class="title">即時品質分數 (0~1000)</div>
+    <div class="card">
+      <div class="title">即時品質分數 (0~1000)</div>
+      <div class="score mono" id="score">0</div>
       <div class="bar"><div id="scoreBar"></div></div>
       <div style="margin-top:8px">
         <span id="stabilityPill" class="pill bad">未開始</span>
@@ -57,7 +58,7 @@
       <div class="row"><div class="k">穩定度判斷</div><div class="v" id="stabilityText">-</div></div>
       <div class="row"><div class="k">判斷理由</div><div class="v" id="reason">-</div></div>
     </div>
-
+    <div class="row"><div class="k">地圖</div><div class="v" id="mapLinks">-</div></div>
     <div class="card">
       <div class="title">可取得定位資料</div>
       <div class="row"><div class="k">緯度 / 經度</div><div class="v mono" id="latlng">-</div></div>
@@ -263,6 +264,17 @@ function drawScoreChart(){
   }
 
   function onSuccess(pos){
+    const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+  const g = `https://www.google.com/maps?q=${lat},${lng}`;
+  const a = `https://maps.apple.com/?ll=${lat},${lng}`;
+  const o = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
+  $("mapLinks").innerHTML =
+    `<a href="${g}" target="_blank">Google Maps</a> | ` +
+    `<a href="${a}" target="_blank">Apple Maps</a> | ` +
+    `<a href="${o}" target="_blank">OpenStreetMap</a>`;
+
+    
     success++;
     lastPos = pos;
     lastFixAt = Date.now();
